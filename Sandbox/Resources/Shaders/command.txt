@@ -1,0 +1,2 @@
+C:\VulkanSDK\1.2.170.0\Bin\glslangValidator.exe shader.vert -V -S vert -o shader.vert.spv
+C:\VulkanSDK\1.2.170.0\Bin\glslangValidator.exe shader.frag -V -S frag -o shader.frag.spv

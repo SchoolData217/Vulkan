@@ -3,15 +3,15 @@
 
 #include <sstream>
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#define GLFW_INCLUDE_VULKAN
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3.h>
-#include <GLFW/glfw3native.h>
-#include <vulkan/vk_layer.h>
-#include <vulkan/vulkan_win32.h>
-
 using namespace std;
+
+static const array<VkClearValue, 2> clearValue = 
+{
+	{
+		{0.0f, 0.0f, 0.0, 0.0f}, // for Color
+		{1.0f, 0 } // for Depth
+	}
+};
 
 namespace {
 #pragma region debug report
@@ -48,63 +48,7 @@ namespace {
 	PFN_vkDestroyDebugReportCallbackEXT m_vkDestroyDebugReportCallbackEXT;
 	VkDebugReportCallbackEXT  m_debugReport;
 
-
-	void checkResult(VkResult result)
-	{
-		if (result != VK_SUCCESS)
-		{
-			DebugBreak();
-		}
-	}
 #pragma endregion
-
-	VkInstance m_instance;
-	VkPhysicalDevice m_physDev;
-	VkPhysicalDeviceMemoryProperties m_physMemProps;
-	uint32_t m_graphicsQueueIndex;
-	VkDevice m_device;
-	VkQueue m_deviceQueue;
-	VkCommandPool m_commandPool;
-	VkSurfaceKHR m_surface;
-	VkSurfaceFormatKHR m_surfaceFormat;
-	VkSurfaceCapabilitiesKHR  m_surfaceCaps;
-	VkPresentModeKHR m_presentMode;
-	VkSwapchainKHR m_swapchain;
-	VkExtent2D m_swapchainExtent;
-	VkImage m_depthBuffer;
-	VkDeviceMemory m_depthBufferMemory;
-	VkImageView m_depthBufferView;
-	std::vector<VkImage> m_swapchainImages;
-	std::vector<VkImageView> m_swapchainViews;
-	VkRenderPass m_renderPass;
-	std::vector<VkFramebuffer> m_framebuffers;
-	std::vector<VkCommandBuffer> m_commands;
-	std::vector<VkFence> m_fences;
-	VkSemaphore m_renderCompletedSem, m_presentCompletedSem;
-
-	uint32_t m_imageIndex;
-
-	void MAKE_COMMAND(VkCommandBuffer command) { }
-
-
-	uint32_t getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFlags requestProps)
-	{
-		uint32_t result = ~0u;
-		for (uint32_t i = 0; i < m_physMemProps.memoryTypeCount; ++i)
-		{
-			if (requestBits & 1)
-			{
-				const auto& types = m_physMemProps.memoryTypes[i];
-				if ((types.propertyFlags & requestProps) == requestProps)
-				{
-					result = i;
-					break;
-				}
-			}
-			requestBits >>= 1;
-		}
-		return result;
-	}
 
 }
 
@@ -162,13 +106,6 @@ namespace Engine {
 		auto commandFence = m_fences[nextImageIndex];
 		vkWaitForFences(m_device, 1, &commandFence, VK_TRUE, UINT64_MAX);
 
-		// クリア値
-		array<VkClearValue, 2> clearValue = {
-		  { {0.0f, 1.0f, 0.0, 0.0f}, // for Color
-			{1.0f, 0 } // for Depth
-		  }
-		};
-
 		VkRenderPassBeginInfo renderPassBI{};
 		renderPassBI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 		renderPassBI.renderPass = m_renderPass;
@@ -186,7 +123,7 @@ namespace Engine {
 		vkCmdBeginRenderPass(command, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE);
 
 		m_imageIndex = nextImageIndex;
-		MAKE_COMMAND(command);
+		makeCommand(command);
 
 		// コマンド・レンダーパス終了
 		vkCmdEndRenderPass(command);
@@ -219,6 +156,49 @@ namespace Engine {
 
 	void VulkanTest::Terminate()
 	{
+		vkDeviceWaitIdle(m_device);
+
+		cleanup();
+
+		vkFreeCommandBuffers(m_device, m_commandPool, uint32_t(m_commands.size()), m_commands.data());
+		m_commands.clear();
+
+		vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+		for (auto& v : m_framebuffers)
+		{
+			vkDestroyFramebuffer(m_device, v, nullptr);
+		}
+		m_framebuffers.clear();
+
+		vkFreeMemory(m_device, m_depthBufferMemory, nullptr);
+		vkDestroyImage(m_device, m_depthBuffer, nullptr);
+		vkDestroyImageView(m_device, m_depthBufferView, nullptr);
+
+		for (auto& v : m_swapchainViews)
+		{
+			vkDestroyImageView(m_device, v, nullptr);
+		}
+		m_swapchainImages.clear();
+		vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+
+		for (auto& v : m_fences)
+		{
+			vkDestroyFence(m_device, v, nullptr);
+		}
+		m_fences.clear();
+		vkDestroySemaphore(m_device, m_presentCompletedSem, nullptr);
+		vkDestroySemaphore(m_device, m_renderCompletedSem, nullptr);
+
+		vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+
+		vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+		vkDestroyDevice(m_device, nullptr);
+
+#ifdef _DEBUG
+		disableDebugReport();
+#endif
+
+		vkDestroyInstance(m_instance, nullptr);
 	}
 
 	void VulkanTest::initializeInstance()
@@ -427,6 +407,25 @@ namespace Engine {
 		vkBindImageMemory(m_device, m_depthBuffer, m_depthBufferMemory, 0);
 	}
 
+	uint32_t VulkanTest::getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFlags requestProps)
+	{
+		uint32_t result = ~0u;
+		for (uint32_t i = 0; i < m_physMemProps.memoryTypeCount; ++i)
+		{
+			if (requestBits & 1)
+			{
+				const auto& types = m_physMemProps.memoryTypes[i];
+				if ((types.propertyFlags & requestProps) == requestProps)
+				{
+					result = i;
+					break;
+				}
+			}
+			requestBits >>= 1;
+		}
+		return result;
+	}
+
 	void VulkanTest::createImageViews()
 	{
 		uint32_t imageCount;
@@ -590,6 +589,22 @@ namespace Engine {
 		drcCI.flags = flags;
 		drcCI.pfnCallback = &DebugReportCallback;
 		m_vkCreateDebugReportCallbackEXT(m_instance, &drcCI, nullptr, &m_debugReport);
+	}
+
+	void VulkanTest::disableDebugReport()
+	{
+		if (m_vkDestroyDebugReportCallbackEXT)
+		{
+			m_vkDestroyDebugReportCallbackEXT(m_instance, m_debugReport, nullptr);
+		}
+	}
+
+	void VulkanTest::checkResult(VkResult result)
+	{
+		if (result != VK_SUCCESS)
+		{
+			DebugBreak();
+		}
 	}
 
 }
