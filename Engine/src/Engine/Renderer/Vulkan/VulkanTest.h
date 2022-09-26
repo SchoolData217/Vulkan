@@ -9,6 +9,7 @@
 #include <vulkan/vulkan_win32.h>
 
 #include "Engine/Renderer/Vulkan/VulkanContext.h"
+#include "Engine/Renderer/Vulkan/VulkanSwapChain.h"
 
 class VulkanTest
 {
@@ -18,9 +19,6 @@ public:
 	void Terminate();
 
 protected:
-	uint32_t searchGraphicsQueueIndex();
-	void selectSurfaceFormat(uint32_t format);
-	void createSwapchain(GLFWwindow* window);
 	void createDepthBuffer();
 	uint32_t getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFlags requestProps);
 	void createImageViews();
@@ -35,24 +33,11 @@ protected:
 
 protected:
 	Engine::VulkanContext m_Context;
+	Engine::VulkanSwapChain m_SwapChain;
 
-	uint32_t m_graphicsQueueIndex;
-	VkSurfaceKHR m_surface;
-	VkSurfaceFormatKHR m_surfaceFormat;
-	VkSurfaceCapabilitiesKHR  m_surfaceCaps;
-	VkPresentModeKHR m_presentMode;
-	VkSwapchainKHR m_swapchain;
-	VkExtent2D m_swapchainExtent;
 	VkImage m_depthBuffer;
 	VkDeviceMemory m_depthBufferMemory;
 	VkImageView m_depthBufferView;
-	std::vector<VkImage> m_swapchainImages;
-	std::vector<VkImageView> m_swapchainViews;
-	VkRenderPass m_renderPass;
-	std::vector<VkFramebuffer> m_framebuffers;
-	std::vector<VkCommandBuffer> m_commands;
-	std::vector<VkFence> m_fences;
-	VkSemaphore m_renderCompletedSem, m_presentCompletedSem;
 
-	uint32_t m_imageIndex;
+	uint32_t m_imageIndex = 0;
 };

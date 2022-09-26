@@ -17,18 +17,10 @@ void VulkanTest::Initialize(GLFWwindow* window)
 {
 	m_Context.Init();
 
-	m_graphicsQueueIndex = searchGraphicsQueueIndex();
-
-	// サーフェース生成
-	glfwCreateWindowSurface(Engine::VulkanContext::GetInstance(), window, nullptr, &m_surface);
-	// サーフェースのフォーマット情報選択
-	selectSurfaceFormat(VK_FORMAT_B8G8R8A8_UNORM);
-	// サーフェースの能力値情報取得
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &m_surfaceCaps);
-	VkBool32 isSupport;
-	vkGetPhysicalDeviceSurfaceSupportKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_graphicsQueueIndex, m_surface, &isSupport);
-
-	createSwapchain(window);
+	m_SwapChain.Init(m_Context.GetInstance(), m_Context.m_Device);
+	m_SwapChain.InitSurface(window);
+	uint32_t width = 1600, height = 900;
+	m_SwapChain.Create(&width, &height, true);
 
 	createDepthBuffer();
 
@@ -48,44 +40,44 @@ void VulkanTest::Initialize(GLFWwindow* window)
 void VulkanTest::Render()
 {
 	uint32_t nextImageIndex = 0;
-	vkAcquireNextImageKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, UINT64_MAX, m_presentCompletedSem, VK_NULL_HANDLE, &nextImageIndex);
-	auto commandFence = m_fences[nextImageIndex];
+	vkAcquireNextImageKHR(m_Context.m_Device->m_LogicalDevice, m_SwapChain.m_SwapChain, UINT64_MAX, m_SwapChain.m_Semaphores.PresentComplete, VK_NULL_HANDLE, &nextImageIndex);
+	auto commandFence = m_SwapChain.m_WaitFences[nextImageIndex];
 	vkWaitForFences(m_Context.m_Device->m_LogicalDevice, 1, &commandFence, VK_TRUE, UINT64_MAX);
 
 	VkRenderPassBeginInfo renderPassBI{};
 	renderPassBI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassBI.renderPass = m_renderPass;
-	renderPassBI.framebuffer = m_framebuffers[nextImageIndex];
-	renderPassBI.renderArea.offset = VkOffset2D{ 0, 0 };
-	renderPassBI.renderArea.extent = m_swapchainExtent;
+	renderPassBI.renderPass = m_SwapChain.m_RenderPass;
+	renderPassBI.framebuffer = m_SwapChain.m_Framebuffers[nextImageIndex];
+	renderPassBI.renderArea.offset = { 0, 0 };
+	renderPassBI.renderArea.extent = { m_SwapChain.m_Width, m_SwapChain.m_Height };
 	renderPassBI.pClearValues = clearValue.data();
 	renderPassBI.clearValueCount = uint32_t(clearValue.size());
 
 	// コマンドバッファ・レンダーパス開始
 	VkCommandBufferBeginInfo commandBI{};
 	commandBI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	auto& command = m_commands[nextImageIndex];
-	vkBeginCommandBuffer(command, &commandBI);
-	vkCmdBeginRenderPass(command, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE);
+	auto& command = m_SwapChain.m_CommandBuffers[nextImageIndex];
+	vkBeginCommandBuffer(command.CommandBuffer, &commandBI);
+	vkCmdBeginRenderPass(command.CommandBuffer, &renderPassBI, VK_SUBPASS_CONTENTS_INLINE);
 
 	m_imageIndex = nextImageIndex;
-	makeCommand(command);
+	makeCommand(command.CommandBuffer);
 
 	// コマンド・レンダーパス終了
-	vkCmdEndRenderPass(command);
-	vkEndCommandBuffer(command);
+	vkCmdEndRenderPass(command.CommandBuffer);
+	vkEndCommandBuffer(command.CommandBuffer);
 
 	// コマンドを実行（送信)
 	VkSubmitInfo submitInfo{};
 	VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &command;
+	submitInfo.pCommandBuffers = &command.CommandBuffer;
 	submitInfo.pWaitDstStageMask = &waitStageMask;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &m_presentCompletedSem;
+	submitInfo.pWaitSemaphores = &m_SwapChain.m_Semaphores.PresentComplete;
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_renderCompletedSem;
+	submitInfo.pSignalSemaphores = &m_SwapChain.m_Semaphores.RenderComplete;
 	vkResetFences(m_Context.m_Device->m_LogicalDevice, 1, &commandFence);
 	vkQueueSubmit(m_Context.m_Device->m_GraphicsQueue, 1, &submitInfo, commandFence);
 
@@ -93,10 +85,10 @@ void VulkanTest::Render()
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &m_swapchain;
+	presentInfo.pSwapchains = &m_SwapChain.m_SwapChain;
 	presentInfo.pImageIndices = &nextImageIndex;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &m_renderCompletedSem;
+	presentInfo.pWaitSemaphores = &m_SwapChain.m_Semaphores.RenderComplete;
 	vkQueuePresentKHR(m_Context.m_Device->m_GraphicsQueue, &presentInfo);
 }
 
@@ -106,106 +98,11 @@ void VulkanTest::Terminate()
 
 	cleanup();
 
-	vkFreeCommandBuffers(m_Context.m_Device->m_LogicalDevice, m_Context.m_Device->m_CommandPool, uint32_t(m_commands.size()), m_commands.data());
-	m_commands.clear();
-
-	vkDestroyRenderPass(m_Context.m_Device->m_LogicalDevice, m_renderPass, nullptr);
-	for (auto& v : m_framebuffers)
-	{
-		vkDestroyFramebuffer(m_Context.m_Device->m_LogicalDevice, v, nullptr);
-	}
-	m_framebuffers.clear();
-
 	vkFreeMemory(m_Context.m_Device->m_LogicalDevice, m_depthBufferMemory, nullptr);
 	vkDestroyImage(m_Context.m_Device->m_LogicalDevice, m_depthBuffer, nullptr);
 	vkDestroyImageView(m_Context.m_Device->m_LogicalDevice, m_depthBufferView, nullptr);
 
-	for (auto& v : m_swapchainViews)
-	{
-		vkDestroyImageView(m_Context.m_Device->m_LogicalDevice, v, nullptr);
-	}
-	m_swapchainImages.clear();
-	vkDestroySwapchainKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, nullptr);
-
-	for (auto& v : m_fences)
-	{
-		vkDestroyFence(m_Context.m_Device->m_LogicalDevice, v, nullptr);
-	}
-	m_fences.clear();
-	vkDestroySemaphore(m_Context.m_Device->m_LogicalDevice, m_presentCompletedSem, nullptr);
-	vkDestroySemaphore(m_Context.m_Device->m_LogicalDevice, m_renderCompletedSem, nullptr);
-
-	vkDestroySurfaceKHR(Engine::VulkanContext::GetInstance(), m_surface, nullptr);
-}
-
-uint32_t VulkanTest::searchGraphicsQueueIndex()
-{
-	uint32_t propCount;
-	vkGetPhysicalDeviceQueueFamilyProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, &propCount, nullptr);
-	vector<VkQueueFamilyProperties> props(propCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, &propCount, props.data());
-
-	uint32_t graphicsQueue = ~0u;
-	for (uint32_t i = 0; i < propCount; ++i)
-	{
-		if (props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
-		{
-			graphicsQueue = i; break;
-		}
-	}
-	return graphicsQueue;
-}
-
-void VulkanTest::selectSurfaceFormat(uint32_t format)
-{
-	uint32_t surfaceFormatCount = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &surfaceFormatCount, nullptr);
-	std::vector<VkSurfaceFormatKHR> formats(surfaceFormatCount);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &surfaceFormatCount, formats.data());
-
-	// 検索して一致するフォーマットを見つける.
-	for (const auto& f : formats)
-	{
-		if (f.format == format)
-		{
-			m_surfaceFormat = f;
-		}
-	}
-}
-
-void VulkanTest::createSwapchain(GLFWwindow* window)
-{
-	auto imageCount = (std::max)(2u, m_surfaceCaps.minImageCount);
-	auto extent = m_surfaceCaps.currentExtent;
-	if (extent.width == ~0u)
-	{
-		// 値が無効なのでウィンドウサイズを使用する.
-		int width, height;
-		glfwGetWindowSize(window, &width, &height);
-		extent.width = uint32_t(width);
-		extent.height = uint32_t(height);
-	}
-	uint32_t queueFamilyIndices[] = { m_graphicsQueueIndex };
-	VkSwapchainCreateInfoKHR ci{};
-	ci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	ci.surface = m_surface;
-	ci.minImageCount = imageCount;
-	ci.imageFormat = m_surfaceFormat.format;
-	ci.imageColorSpace = m_surfaceFormat.colorSpace;
-	ci.imageExtent = extent;
-	ci.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	ci.preTransform = m_surfaceCaps.currentTransform;
-	ci.imageArrayLayers = 1;
-	ci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	ci.queueFamilyIndexCount = 0;
-	ci.presentMode = m_presentMode;
-	ci.oldSwapchain = VK_NULL_HANDLE;
-	ci.clipped = VK_TRUE;
-	ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-	auto result = vkCreateSwapchainKHR(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchain);
-	VK_CHECK_RESULT(result);
-	m_swapchainExtent = extent;
+	m_SwapChain.Destroy();
 }
 
 void VulkanTest::createDepthBuffer()
@@ -214,8 +111,8 @@ void VulkanTest::createDepthBuffer()
 	ci.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
 	ci.imageType = VK_IMAGE_TYPE_2D;
 	ci.format = VK_FORMAT_D32_SFLOAT;
-	ci.extent.width = m_swapchainExtent.width;
-	ci.extent.height = m_swapchainExtent.height;
+	ci.extent.width = m_SwapChain.m_Width;
+	ci.extent.height = m_SwapChain.m_Height;
 	ci.extent.depth = 1;
 	ci.mipLevels = 1;
 	ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
@@ -255,29 +152,6 @@ uint32_t VulkanTest::getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFl
 
 void VulkanTest::createImageViews()
 {
-	uint32_t imageCount;
-	vkGetSwapchainImagesKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, &imageCount, nullptr);
-	m_swapchainImages.resize(imageCount);
-	vkGetSwapchainImagesKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, &imageCount, m_swapchainImages.data());
-	m_swapchainViews.resize(imageCount);
-	for (uint32_t i = 0; i < imageCount; ++i)
-	{
-		VkImageViewCreateInfo ci{};
-		ci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		ci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		ci.format = m_surfaceFormat.format;
-		ci.components = {
-			VK_COMPONENT_SWIZZLE_R,
-			VK_COMPONENT_SWIZZLE_G,
-			VK_COMPONENT_SWIZZLE_B,
-			VK_COMPONENT_SWIZZLE_A,
-		};
-		ci.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-		ci.image = m_swapchainImages[i];
-		auto result = vkCreateImageView(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchainViews[i]);
-		VK_CHECK_RESULT(result);
-	}
-
 	// for depthbuffer
 	{
 		VkImageViewCreateInfo ci{};
@@ -307,7 +181,7 @@ void VulkanTest::createRenderPass()
 	auto& depthTarget = attachments[1];
 
 	colorTarget = VkAttachmentDescription{};
-	colorTarget.format = m_surfaceFormat.format;
+	colorTarget.format = m_SwapChain.m_ColorFormat;
 	colorTarget.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorTarget.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorTarget.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -344,7 +218,7 @@ void VulkanTest::createRenderPass()
 	ci.subpassCount = 1;
 	ci.pSubpasses = &subpassDesc;
 
-	auto result = vkCreateRenderPass(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderPass);
+	auto result = vkCreateRenderPass(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_SwapChain.m_RenderPass);
 	VK_CHECK_RESULT(result);
 }
 
@@ -352,23 +226,23 @@ void VulkanTest::createFramebuffer()
 {
 	VkFramebufferCreateInfo ci{};
 	ci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-	ci.renderPass = m_renderPass;
-	ci.width = m_swapchainExtent.width;
-	ci.height = m_swapchainExtent.height;
+	ci.renderPass = m_SwapChain.m_RenderPass;
+	ci.width = m_SwapChain.m_Width;
+	ci.height = m_SwapChain.m_Height;
 	ci.layers = 1;
-	m_framebuffers.clear();
-	for (auto& v : m_swapchainViews)
+	m_SwapChain.m_Framebuffers.clear();
+	for (auto& v : m_SwapChain.m_Images)
 	{
 		array<VkImageView, 2> attachments;
 		ci.attachmentCount = uint32_t(attachments.size());
 		ci.pAttachments = attachments.data();
-		attachments[0] = v;
+		attachments[0] = v.ImageView;
 		attachments[1] = m_depthBufferView;
 
 		VkFramebuffer framebuffer;
 		auto result = vkCreateFramebuffer(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &framebuffer);
 		VK_CHECK_RESULT(result);
-		m_framebuffers.push_back(framebuffer);
+		m_SwapChain.m_Framebuffers.push_back(framebuffer);
 	}
 }
 
@@ -377,18 +251,18 @@ void VulkanTest::prepareCommandBuffers()
 	VkCommandBufferAllocateInfo ai{};
 	ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	ai.commandPool = m_Context.m_Device->m_CommandPool;
-	ai.commandBufferCount = uint32_t(m_swapchainViews.size());
+	ai.commandBufferCount = uint32_t(m_SwapChain.m_Images.size());
 	ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	m_commands.resize(ai.commandBufferCount);
-	auto result = vkAllocateCommandBuffers(m_Context.m_Device->m_LogicalDevice, &ai, m_commands.data());
+	m_SwapChain.m_CommandBuffers.resize(ai.commandBufferCount);
+	auto result = vkAllocateCommandBuffers(m_Context.m_Device->m_LogicalDevice, &ai, &m_SwapChain.m_CommandBuffers[m_imageIndex].CommandBuffer);
 	VK_CHECK_RESULT(result);
 
 	// コマンドバッファのフェンスも同数用意する.
-	m_fences.resize(ai.commandBufferCount);
+	m_SwapChain.m_WaitFences.resize(ai.commandBufferCount);
 	VkFenceCreateInfo ci{};
 	ci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	for (auto& v : m_fences)
+	for (auto& v : m_SwapChain.m_WaitFences)
 	{
 		result = vkCreateFence(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &v);
 		VK_CHECK_RESULT(result);
@@ -399,6 +273,6 @@ void VulkanTest::prepareSemaphores()
 {
 	VkSemaphoreCreateInfo ci{};
 	ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderCompletedSem);
-	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_presentCompletedSem);
+	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_SwapChain.m_Semaphores.RenderComplete);
+	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_SwapChain.m_Semaphores.PresentComplete);
 }

@@ -97,15 +97,15 @@ void RendererTest::prepare()
 	VkViewport viewport;
 	{
 		viewport.x = 0.0f;
-		viewport.y = float(m_swapchainExtent.height);
-		viewport.width = float(m_swapchainExtent.width);
-		viewport.height = -1.0f * float(m_swapchainExtent.height);
+		viewport.y = float(m_SwapChain.m_Height);
+		viewport.width = float(m_SwapChain.m_Width);
+		viewport.height = -1.0f * float(m_SwapChain.m_Height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 	}
 	VkRect2D scissor = {
 		{ 0,0},// offset
-		m_swapchainExtent
+		{m_SwapChain.m_Width, m_SwapChain.m_Height}
 	};
 	VkPipelineViewportStateCreateInfo viewportCI{};
 	viewportCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -165,7 +165,7 @@ void RendererTest::prepare()
 	ci.pMultisampleState = &multisampleCI;
 	ci.pViewportState = &viewportCI;
 	ci.pColorBlendState = &cbCI;
-	ci.renderPass = m_renderPass;
+	ci.renderPass = m_SwapChain.m_RenderPass;
 	ci.layout = m_pipelineLayout;
 	vkCreateGraphicsPipelines(m_Context.m_Device->m_LogicalDevice, VK_NULL_HANDLE, 1, &ci, nullptr, &m_pipeline);
 

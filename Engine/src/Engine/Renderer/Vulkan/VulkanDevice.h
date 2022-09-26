@@ -26,6 +26,9 @@ namespace Engine {
 	public:
 		bool VulkanPhysicalDevice::IsExtensionSupported(const std::string& extensionName) const;
 
+		VkPhysicalDevice GetVulkanPhysicalDevice() const { return m_PhysicalDevice; }
+		VkFormat GetDepthFormat() const { return m_DepthFormat; }
+
 	public:
 		static Ref<VulkanPhysicalDevice> Select();
 
@@ -59,8 +62,12 @@ namespace Engine {
 
 		void Destroy();
 
+		const Ref<VulkanPhysicalDevice>& GetPhysicalDevice() const { return m_PhysicalDevice; }
+		VkDevice GetVulkanDevice() const { return m_LogicalDevice; }
+
 	private:
 		VkDevice m_LogicalDevice = nullptr;
+		Ref<VulkanPhysicalDevice> m_PhysicalDevice;
 
 		VkCommandPool m_CommandPool = nullptr, m_ComputeCommandPool = nullptr;
 

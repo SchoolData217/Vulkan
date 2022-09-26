@@ -2,7 +2,14 @@
 
 #include <vulkan/vulkan.h>
 
+inline PFN_vkSetDebugUtilsObjectNameEXT fpSetDebugUtilsObjectNameEXT; //Making it static randomly sets it to nullptr for some reason.
+inline PFN_vkCmdBeginDebugUtilsLabelEXT fpCmdBeginDebugUtilsLabelEXT;
+inline PFN_vkCmdEndDebugUtilsLabelEXT fpCmdEndDebugUtilsLabelEXT;
+inline PFN_vkCmdInsertDebugUtilsLabelEXT fpCmdInsertDebugUtilsLabelEXT;
+
 namespace Engine {
+
+	void VulkanLoadDebugUtilsExtensions(VkInstance instance);
 
 	inline const char* VKResultToString(VkResult result)
 	{
@@ -134,4 +141,20 @@ namespace Engine {
 {\
 	VkResult res = (f);\
 	Engine::VulkanCheckResult(res);\
+}
+
+namespace Engine {
+
+	inline static void SetDebugUtilsObjectName(const VkDevice device, const VkObjectType objectType, const std::string& name, const void* handle)
+	{
+		VkDebugUtilsObjectNameInfoEXT nameInfo;
+		nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+		nameInfo.objectType = objectType;
+		nameInfo.pObjectName = name.c_str();
+		nameInfo.objectHandle = (uint64_t)handle;
+		nameInfo.pNext = VK_NULL_HANDLE;
+
+		VK_CHECK_RESULT(fpSetDebugUtilsObjectNameEXT(device, &nameInfo));
+	}
+
 }

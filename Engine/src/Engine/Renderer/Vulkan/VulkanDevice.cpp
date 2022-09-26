@@ -214,6 +214,7 @@ namespace Engine {
 #define HAS_AFTERMATH 0
 
 	VulkanDevice::VulkanDevice(const Ref<VulkanPhysicalDevice>& physicalDevice, VkPhysicalDeviceFeatures enabledFeatures)
+		: m_PhysicalDevice(physicalDevice)
 	{
 		const bool enableAftermath = true;
 
