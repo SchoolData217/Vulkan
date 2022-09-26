@@ -3,11 +3,11 @@
 
 #include <GLFW/glfw3.h>
 
-#include "Engine/Renderer/Vulkan/RendererTest.h"
+#include "Engine/Renderer/Vulkan/VKCubeRenderer.h"
 
 namespace {
 
-	Engine::RendererTest s_VulkanTest;
+	VKCubeRenderer s_VulkanTest;
 
 }
 
