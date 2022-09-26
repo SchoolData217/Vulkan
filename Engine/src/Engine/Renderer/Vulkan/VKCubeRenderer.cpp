@@ -178,7 +178,7 @@ void VKCubeRenderer::makeCommand(VkCommandBuffer command)
     ShaderParameters shaderParam{};
     shaderParam.mtxWorld = glm::rotate(glm::identity<glm::mat4>(), glm::radians(timer.ElapsedMillis() * 0.05f), glm::vec3(1, 1, 0));
     shaderParam.mtxView = lookAtRH(vec3(0.0f, 3.0f, 5.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
-    shaderParam.mtxProj = perspective(glm::radians(60.0f), 640.0f / 480, 0.01f, 100.0f);
+    shaderParam.mtxProj = perspective(glm::radians(60.0f), 1600.0f / 900.0f, 0.01f, 100.0f);
     {
         auto memory = m_uniformBuffers[m_imageIndex].memory;
         void* p;

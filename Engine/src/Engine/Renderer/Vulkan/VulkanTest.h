@@ -8,6 +8,8 @@
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan_win32.h>
 
+#include "Engine/Renderer/Vulkan/VulkanContext.h"
+
 class VulkanTest
 {
 public:
@@ -41,7 +43,7 @@ protected:
 	void disableDebugReport();
 
 protected:
-	VkInstance m_instance;
+	Engine::VulkanContext m_Context;
 	VkPhysicalDevice m_physDev;
 	VkPhysicalDeviceMemoryProperties m_physMemProps;
 	uint32_t m_graphicsQueueIndex;

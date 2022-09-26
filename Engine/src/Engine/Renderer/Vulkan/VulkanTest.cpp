@@ -1,6 +1,8 @@
 #include "epch.h"
 #include "VulkanTest.h"
 
+
+
 #include <sstream>
 
 using namespace std;
@@ -8,7 +10,7 @@ using namespace std;
 static const array<VkClearValue, 2> clearValue = 
 {
 {
-	{0.2f, 0.2f, 0.2, 1.0f}, // for Color
+	{0.2f, 0.2f, 0.2f, 1.0f}, // for Color
 	{1.0f, 0.0f } // for Depth
 }
 };
@@ -53,10 +55,12 @@ VkDebugReportCallbackEXT  m_debugReport;
 }
 
 #define GetInstanceProcAddr(FuncName) \
-m_##FuncName = reinterpret_cast<PFN_##FuncName>(vkGetInstanceProcAddr(m_instance, #FuncName))
+m_##FuncName = reinterpret_cast<PFN_##FuncName>(vkGetInstanceProcAddr(m_Context.s_VulkanInstance, #FuncName))
 
 void VulkanTest::Initialize(GLFWwindow* window)
 {
+	m_Context.Init();
+
 	initializeInstance();
 
 	selectPhysicalDevice();
@@ -72,7 +76,7 @@ void VulkanTest::Initialize(GLFWwindow* window)
 	prepareCommandPool();
 
 	// サーフェース生成
-	glfwCreateWindowSurface(m_instance, window, nullptr, &m_surface);
+	glfwCreateWindowSurface(m_Context.s_VulkanInstance, window, nullptr, &m_surface);
 	// サーフェースのフォーマット情報選択
 	selectSurfaceFormat(VK_FORMAT_B8G8R8A8_UNORM);
 	// サーフェースの能力値情報取得
@@ -189,14 +193,14 @@ void VulkanTest::Terminate()
 
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
 
-	vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+	vkDestroySurfaceKHR(m_Context.s_VulkanInstance, m_surface, nullptr);
 	vkDestroyDevice(m_device, nullptr);
 
 #ifdef _DEBUG
 	disableDebugReport();
 #endif
 
-	vkDestroyInstance(m_instance, nullptr);
+	//vkDestroyInstance(m_Context.s_VulkanInstance, nullptr);
 }
 
 void VulkanTest::initializeInstance()
@@ -206,7 +210,7 @@ void VulkanTest::initializeInstance()
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Vulkan";
 	appInfo.pEngineName = "Vulkan";
-	appInfo.apiVersion = VK_API_VERSION_1_1;
+	appInfo.apiVersion = VK_API_VERSION_1_2;
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 
 
@@ -243,16 +247,16 @@ void VulkanTest::initializeInstance()
 
 
 	// インスタンス生成
-	auto result = vkCreateInstance(&ci, nullptr, &m_instance);
+	auto result = vkCreateInstance(&ci, nullptr, &m_Context.s_VulkanInstance);
 	checkResult(result);
 }
 
 void VulkanTest::selectPhysicalDevice()
 {
 	uint32_t devCount = 0;
-	vkEnumeratePhysicalDevices(m_instance, &devCount, nullptr);
+	vkEnumeratePhysicalDevices(m_Context.s_VulkanInstance, &devCount, nullptr);
 	std::vector<VkPhysicalDevice> physDevs(devCount);
-	vkEnumeratePhysicalDevices(m_instance, &devCount, physDevs.data());
+	vkEnumeratePhysicalDevices(m_Context.s_VulkanInstance, &devCount, physDevs.data());
 
 	// 最初のデバイスを使用する
 	m_physDev = physDevs[0];
@@ -586,14 +590,14 @@ void VulkanTest::enableDebugReport()
 	drcCI.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
 	drcCI.flags = flags;
 	drcCI.pfnCallback = &DebugReportCallback;
-	m_vkCreateDebugReportCallbackEXT(m_instance, &drcCI, nullptr, &m_debugReport);
+	m_vkCreateDebugReportCallbackEXT(m_Context.s_VulkanInstance, &drcCI, nullptr, &m_debugReport);
 }
 
 void VulkanTest::disableDebugReport()
 {
 	if (m_vkDestroyDebugReportCallbackEXT)
 	{
-		m_vkDestroyDebugReportCallbackEXT(m_instance, m_debugReport, nullptr);
+		m_vkDestroyDebugReportCallbackEXT(m_Context.s_VulkanInstance, m_debugReport, nullptr);
 	}
 }
 
