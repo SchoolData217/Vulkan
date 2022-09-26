@@ -5,6 +5,8 @@
 #include "Vulkan.h"
 
 class VulkanTest;
+class VKCubeRenderer;
+class RendererTest;
 
 namespace Engine {
 
@@ -20,6 +22,9 @@ namespace Engine {
 	public:
 		VulkanPhysicalDevice();
 		~VulkanPhysicalDevice() = default;
+
+	public:
+		bool VulkanPhysicalDevice::IsExtensionSupported(const std::string& extensionName) const;
 
 	public:
 		static Ref<VulkanPhysicalDevice> Select();
@@ -42,7 +47,31 @@ namespace Engine {
 
 		VkFormat m_DepthFormat = VK_FORMAT_UNDEFINED;
 
+		friend class VulkanDevice;
 		friend class VulkanTest;
+	};
+
+	class VulkanDevice
+	{
+	public:
+		VulkanDevice(const Ref<VulkanPhysicalDevice>& physicalDevice, VkPhysicalDeviceFeatures enabledFeatures);
+		~VulkanDevice() = default;
+
+		void Destroy();
+
+	private:
+		VkDevice m_LogicalDevice = nullptr;
+
+		VkCommandPool m_CommandPool = nullptr, m_ComputeCommandPool = nullptr;
+
+		VkQueue m_GraphicsQueue;
+		VkQueue m_ComputeQueue;
+
+		bool m_EnableDebugMarkers = false;
+
+		friend class VulkanTest;
+		friend class VKCubeRenderer;
+		friend class RendererTest;
 	};
 
 }

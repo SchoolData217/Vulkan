@@ -115,6 +115,11 @@ namespace Engine {
 		ENGINE_ASSERT(m_DepthFormat);
 	}
 
+	bool VulkanPhysicalDevice::IsExtensionSupported(const std::string& extensionName) const
+	{
+		return m_SupportedExtensions.find(extensionName) != m_SupportedExtensions.end();
+	}
+
 	Ref<VulkanPhysicalDevice> VulkanPhysicalDevice::Select()
 	{
 		return CreateRef<VulkanPhysicalDevice>();
@@ -202,6 +207,97 @@ namespace Engine {
 		}
 
 		return VK_FORMAT_UNDEFINED;
+	}
+
+
+
+#define HAS_AFTERMATH 0
+
+	VulkanDevice::VulkanDevice(const Ref<VulkanPhysicalDevice>& physicalDevice, VkPhysicalDeviceFeatures enabledFeatures)
+	{
+		const bool enableAftermath = true;
+
+		// Do we need to enable any other extensions (eg. NV_RAYTRACING?)
+		std::vector<const char*> deviceExtensions;
+		// If the device will be used for presenting to a display via a swapchain we need to request the swapchain extension
+		ENGINE_ASSERT(physicalDevice->IsExtensionSupported(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
+		deviceExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+
+		if (physicalDevice->IsExtensionSupported(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME))
+			deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+		if (physicalDevice->IsExtensionSupported(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME))
+			deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+
+#if HAS_AFTERMATH
+		VkDeviceDiagnosticsConfigCreateInfoNV aftermathInfo = {};
+		bool canEnableAftermath = enableAftermath && m_PhysicalDevice->IsExtensionSupported(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) && m_PhysicalDevice->IsExtensionSupported(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+		if (canEnableAftermath)
+		{
+			// Must be initialized ~before~ device has been created
+			GpuCrashTracker* gpuCrashTracker = hnew GpuCrashTracker();
+			gpuCrashTracker->Initialize();
+
+			VkDeviceDiagnosticsConfigFlagBitsNV aftermathFlags = (VkDeviceDiagnosticsConfigFlagBitsNV)(VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV |
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV |
+				VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV);
+
+			aftermathInfo.sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV;
+			aftermathInfo.flags = aftermathFlags;
+		}
+#endif
+
+		VkDeviceCreateInfo deviceCreateInfo = {};
+		deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+#if HAS_AFTERMATH
+		if (canEnableAftermath)
+			deviceCreateInfo.pNext = &aftermathInfo;
+#endif
+
+		deviceCreateInfo.queueCreateInfoCount = static_cast<uint32_t>(physicalDevice->m_QueueCreateInfos.size());;
+		deviceCreateInfo.pQueueCreateInfos = physicalDevice->m_QueueCreateInfos.data();
+		deviceCreateInfo.pEnabledFeatures = &enabledFeatures;
+
+		// If a pNext(Chain) has been passed, we need to add it to the device creation info
+		VkPhysicalDeviceFeatures2 physicalDeviceFeatures2{};
+
+		// Enable the debug marker extension if it is present (likely meaning a debugging tool is present)
+		if (physicalDevice->IsExtensionSupported(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
+		{
+			deviceExtensions.push_back(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+			m_EnableDebugMarkers = true;
+		}
+
+		if (!deviceExtensions.empty())
+		{
+			deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
+			deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
+		}
+
+		VkResult result = vkCreateDevice(physicalDevice->m_PhysicalDevice, &deviceCreateInfo, nullptr, &m_LogicalDevice);
+		ENGINE_ASSERT(result == VK_SUCCESS);
+
+		VkCommandPoolCreateInfo cmdPoolInfo = {};
+		cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		cmdPoolInfo.queueFamilyIndex = physicalDevice->m_QueueFamilyIndices.Graphics;
+		cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+		VK_CHECK_RESULT(vkCreateCommandPool(m_LogicalDevice, &cmdPoolInfo, nullptr, &m_CommandPool));
+
+		cmdPoolInfo.queueFamilyIndex = physicalDevice->m_QueueFamilyIndices.Compute;
+		VK_CHECK_RESULT(vkCreateCommandPool(m_LogicalDevice, &cmdPoolInfo, nullptr, &m_ComputeCommandPool));
+
+		// Get a graphics queue from the device
+		vkGetDeviceQueue(m_LogicalDevice, physicalDevice->m_QueueFamilyIndices.Graphics, 0, &m_GraphicsQueue);
+		vkGetDeviceQueue(m_LogicalDevice, physicalDevice->m_QueueFamilyIndices.Compute, 0, &m_ComputeQueue);
+	}
+
+	void VulkanDevice::Destroy()
+	{
+		vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr);
+		vkDestroyCommandPool(m_LogicalDevice, m_ComputeCommandPool, nullptr);
+
+		vkDeviceWaitIdle(m_LogicalDevice);
+		vkDestroyDevice(m_LogicalDevice, nullptr);
 	}
 
 }

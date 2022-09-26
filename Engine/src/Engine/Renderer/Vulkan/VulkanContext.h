@@ -22,10 +22,13 @@ namespace Engine {
 		inline static VkInstance s_VulkanInstance;
 
 		Ref<VulkanPhysicalDevice> m_PhysicalDevice;
+		Ref<VulkanDevice> m_Device;
 
 		VkDebugUtilsMessengerEXT m_DebugUtilsMessenger = VK_NULL_HANDLE;
 
 		friend class VulkanTest;
+		friend class VKCubeRenderer;
+		friend class RendererTest;
 	};
 
 }

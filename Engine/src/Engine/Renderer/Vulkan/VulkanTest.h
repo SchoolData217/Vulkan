@@ -19,8 +19,6 @@ public:
 
 protected:
 	uint32_t searchGraphicsQueueIndex();
-	void createLogicalDevice();
-	void prepareCommandPool();
 	void selectSurfaceFormat(uint32_t format);
 	void createSwapchain(GLFWwindow* window);
 	void createDepthBuffer();
@@ -44,9 +42,6 @@ protected:
 	Engine::VulkanContext m_Context;
 
 	uint32_t m_graphicsQueueIndex;
-	VkDevice m_device;
-	VkQueue m_deviceQueue;
-	VkCommandPool m_commandPool;
 	VkSurfaceKHR m_surface;
 	VkSurfaceFormatKHR m_surfaceFormat;
 	VkSurfaceCapabilitiesKHR  m_surfaceCaps;

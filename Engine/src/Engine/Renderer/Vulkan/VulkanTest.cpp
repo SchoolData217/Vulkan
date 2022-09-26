@@ -1,8 +1,6 @@
 #include "epch.h"
 #include "VulkanTest.h"
 
-
-
 #include <sstream>
 
 using namespace std;
@@ -67,10 +65,6 @@ void VulkanTest::Initialize(GLFWwindow* window)
 	enableDebugReport();
 #endif
 
-	createLogicalDevice();
-
-	prepareCommandPool();
-
 	// サーフェース生成
 	glfwCreateWindowSurface(Engine::VulkanContext::GetInstance(), window, nullptr, &m_surface);
 	// サーフェースのフォーマット情報選択
@@ -100,9 +94,9 @@ void VulkanTest::Initialize(GLFWwindow* window)
 void VulkanTest::Render()
 {
 	uint32_t nextImageIndex = 0;
-	vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, m_presentCompletedSem, VK_NULL_HANDLE, &nextImageIndex);
+	vkAcquireNextImageKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, UINT64_MAX, m_presentCompletedSem, VK_NULL_HANDLE, &nextImageIndex);
 	auto commandFence = m_fences[nextImageIndex];
-	vkWaitForFences(m_device, 1, &commandFence, VK_TRUE, UINT64_MAX);
+	vkWaitForFences(m_Context.m_Device->m_LogicalDevice, 1, &commandFence, VK_TRUE, UINT64_MAX);
 
 	VkRenderPassBeginInfo renderPassBI{};
 	renderPassBI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -138,8 +132,8 @@ void VulkanTest::Render()
 	submitInfo.pWaitSemaphores = &m_presentCompletedSem;
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &m_renderCompletedSem;
-	vkResetFences(m_device, 1, &commandFence);
-	vkQueueSubmit(m_deviceQueue, 1, &submitInfo, commandFence);
+	vkResetFences(m_Context.m_Device->m_LogicalDevice, 1, &commandFence);
+	vkQueueSubmit(m_Context.m_Device->m_GraphicsQueue, 1, &submitInfo, commandFence);
 
 	// Present 処理
 	VkPresentInfoKHR presentInfo{};
@@ -149,48 +143,45 @@ void VulkanTest::Render()
 	presentInfo.pImageIndices = &nextImageIndex;
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = &m_renderCompletedSem;
-	vkQueuePresentKHR(m_deviceQueue, &presentInfo);
+	vkQueuePresentKHR(m_Context.m_Device->m_GraphicsQueue, &presentInfo);
 }
 
 void VulkanTest::Terminate()
 {
-	vkDeviceWaitIdle(m_device);
+	vkDeviceWaitIdle(m_Context.m_Device->m_LogicalDevice);
 
 	cleanup();
 
-	vkFreeCommandBuffers(m_device, m_commandPool, uint32_t(m_commands.size()), m_commands.data());
+	vkFreeCommandBuffers(m_Context.m_Device->m_LogicalDevice, m_Context.m_Device->m_CommandPool, uint32_t(m_commands.size()), m_commands.data());
 	m_commands.clear();
 
-	vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+	vkDestroyRenderPass(m_Context.m_Device->m_LogicalDevice, m_renderPass, nullptr);
 	for (auto& v : m_framebuffers)
 	{
-		vkDestroyFramebuffer(m_device, v, nullptr);
+		vkDestroyFramebuffer(m_Context.m_Device->m_LogicalDevice, v, nullptr);
 	}
 	m_framebuffers.clear();
 
-	vkFreeMemory(m_device, m_depthBufferMemory, nullptr);
-	vkDestroyImage(m_device, m_depthBuffer, nullptr);
-	vkDestroyImageView(m_device, m_depthBufferView, nullptr);
+	vkFreeMemory(m_Context.m_Device->m_LogicalDevice, m_depthBufferMemory, nullptr);
+	vkDestroyImage(m_Context.m_Device->m_LogicalDevice, m_depthBuffer, nullptr);
+	vkDestroyImageView(m_Context.m_Device->m_LogicalDevice, m_depthBufferView, nullptr);
 
 	for (auto& v : m_swapchainViews)
 	{
-		vkDestroyImageView(m_device, v, nullptr);
+		vkDestroyImageView(m_Context.m_Device->m_LogicalDevice, v, nullptr);
 	}
 	m_swapchainImages.clear();
-	vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+	vkDestroySwapchainKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, nullptr);
 
 	for (auto& v : m_fences)
 	{
-		vkDestroyFence(m_device, v, nullptr);
+		vkDestroyFence(m_Context.m_Device->m_LogicalDevice, v, nullptr);
 	}
 	m_fences.clear();
-	vkDestroySemaphore(m_device, m_presentCompletedSem, nullptr);
-	vkDestroySemaphore(m_device, m_renderCompletedSem, nullptr);
-
-	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+	vkDestroySemaphore(m_Context.m_Device->m_LogicalDevice, m_presentCompletedSem, nullptr);
+	vkDestroySemaphore(m_Context.m_Device->m_LogicalDevice, m_renderCompletedSem, nullptr);
 
 	vkDestroySurfaceKHR(Engine::VulkanContext::GetInstance(), m_surface, nullptr);
-	vkDestroyDevice(m_device, nullptr);
 
 #ifdef _DEBUG
 	disableDebugReport();
@@ -213,54 +204,6 @@ uint32_t VulkanTest::searchGraphicsQueueIndex()
 		}
 	}
 	return graphicsQueue;
-}
-
-void VulkanTest::createLogicalDevice()
-{
-	const float defaultQueuePriority(1.0f);
-	VkDeviceQueueCreateInfo devQueueCI{};
-	devQueueCI.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	devQueueCI.queueFamilyIndex = m_graphicsQueueIndex;
-	devQueueCI.queueCount = 1;
-	devQueueCI.pQueuePriorities = &defaultQueuePriority;
-
-
-	vector<VkExtensionProperties> devExtProps;
-	{
-		// 拡張情報の取得.
-		uint32_t count = 0;
-		vkEnumerateDeviceExtensionProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, nullptr, &count, nullptr);
-		devExtProps.resize(count);
-		vkEnumerateDeviceExtensionProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, nullptr, &count, devExtProps.data());
-	}
-
-	vector<const char*> extensions;
-	for (const auto& v : devExtProps)
-	{
-		extensions.push_back(v.extensionName);
-	}
-	VkDeviceCreateInfo ci{};
-	ci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-	ci.pQueueCreateInfos = &devQueueCI;
-	ci.queueCreateInfoCount = 1;
-	ci.ppEnabledExtensionNames = extensions.data();
-	ci.enabledExtensionCount = uint32_t(extensions.size());
-
-	auto result = vkCreateDevice(m_Context.m_PhysicalDevice->m_PhysicalDevice, &ci, nullptr, &m_device);
-	checkResult(result);
-
-	// デバイスキューの取得
-	vkGetDeviceQueue(m_device, m_graphicsQueueIndex, 0, &m_deviceQueue);
-}
-
-void VulkanTest::prepareCommandPool()
-{
-	VkCommandPoolCreateInfo ci{};
-	ci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	ci.queueFamilyIndex = m_graphicsQueueIndex;
-	ci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	auto result = vkCreateCommandPool(m_device, &ci, nullptr, &m_commandPool);
-	checkResult(result);
 }
 
 void VulkanTest::selectSurfaceFormat(uint32_t format)
@@ -310,7 +253,7 @@ void VulkanTest::createSwapchain(GLFWwindow* window)
 	ci.clipped = VK_TRUE;
 	ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-	auto result = vkCreateSwapchainKHR(m_device, &ci, nullptr, &m_swapchain);
+	auto result = vkCreateSwapchainKHR(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchain);
 	checkResult(result);
 	m_swapchainExtent = extent;
 }
@@ -328,17 +271,17 @@ void VulkanTest::createDepthBuffer()
 	ci.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	ci.samples = VK_SAMPLE_COUNT_1_BIT;
 	ci.arrayLayers = 1;
-	auto result = vkCreateImage(m_device, &ci, nullptr, &m_depthBuffer);
+	auto result = vkCreateImage(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_depthBuffer);
 	checkResult(result);
 
 	VkMemoryRequirements reqs;
-	vkGetImageMemoryRequirements(m_device, m_depthBuffer, &reqs);
+	vkGetImageMemoryRequirements(m_Context.m_Device->m_LogicalDevice, m_depthBuffer, &reqs);
 	VkMemoryAllocateInfo ai{};
 	ai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	ai.allocationSize = reqs.size;
 	ai.memoryTypeIndex = getMemoryTypeIndex(reqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-	vkAllocateMemory(m_device, &ai, nullptr, &m_depthBufferMemory);
-	vkBindImageMemory(m_device, m_depthBuffer, m_depthBufferMemory, 0);
+	vkAllocateMemory(m_Context.m_Device->m_LogicalDevice, &ai, nullptr, &m_depthBufferMemory);
+	vkBindImageMemory(m_Context.m_Device->m_LogicalDevice, m_depthBuffer, m_depthBufferMemory, 0);
 }
 
 uint32_t VulkanTest::getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFlags requestProps)
@@ -363,9 +306,9 @@ uint32_t VulkanTest::getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFl
 void VulkanTest::createImageViews()
 {
 	uint32_t imageCount;
-	vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, nullptr);
+	vkGetSwapchainImagesKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, &imageCount, nullptr);
 	m_swapchainImages.resize(imageCount);
-	vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount, m_swapchainImages.data());
+	vkGetSwapchainImagesKHR(m_Context.m_Device->m_LogicalDevice, m_swapchain, &imageCount, m_swapchainImages.data());
 	m_swapchainViews.resize(imageCount);
 	for (uint32_t i = 0; i < imageCount; ++i)
 	{
@@ -381,7 +324,7 @@ void VulkanTest::createImageViews()
 		};
 		ci.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 		ci.image = m_swapchainImages[i];
-		auto result = vkCreateImageView(m_device, &ci, nullptr, &m_swapchainViews[i]);
+		auto result = vkCreateImageView(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchainViews[i]);
 		checkResult(result);
 	}
 
@@ -399,7 +342,7 @@ void VulkanTest::createImageViews()
 		};
 		ci.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
 		ci.image = m_depthBuffer;
-		auto result = vkCreateImageView(m_device, &ci, nullptr, &m_depthBufferView);
+		auto result = vkCreateImageView(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_depthBufferView);
 		checkResult(result);
 	}
 }
@@ -451,7 +394,7 @@ void VulkanTest::createRenderPass()
 	ci.subpassCount = 1;
 	ci.pSubpasses = &subpassDesc;
 
-	auto result = vkCreateRenderPass(m_device, &ci, nullptr, &m_renderPass);
+	auto result = vkCreateRenderPass(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderPass);
 	checkResult(result);
 }
 
@@ -473,7 +416,7 @@ void VulkanTest::createFramebuffer()
 		attachments[1] = m_depthBufferView;
 
 		VkFramebuffer framebuffer;
-		auto result = vkCreateFramebuffer(m_device, &ci, nullptr, &framebuffer);
+		auto result = vkCreateFramebuffer(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &framebuffer);
 		checkResult(result);
 		m_framebuffers.push_back(framebuffer);
 	}
@@ -483,11 +426,11 @@ void VulkanTest::prepareCommandBuffers()
 {
 	VkCommandBufferAllocateInfo ai{};
 	ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	ai.commandPool = m_commandPool;
+	ai.commandPool = m_Context.m_Device->m_CommandPool;
 	ai.commandBufferCount = uint32_t(m_swapchainViews.size());
 	ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	m_commands.resize(ai.commandBufferCount);
-	auto result = vkAllocateCommandBuffers(m_device, &ai, m_commands.data());
+	auto result = vkAllocateCommandBuffers(m_Context.m_Device->m_LogicalDevice, &ai, m_commands.data());
 	checkResult(result);
 
 	// コマンドバッファのフェンスも同数用意する.
@@ -497,7 +440,7 @@ void VulkanTest::prepareCommandBuffers()
 	ci.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 	for (auto& v : m_fences)
 	{
-		result = vkCreateFence(m_device, &ci, nullptr, &v);
+		result = vkCreateFence(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &v);
 		checkResult(result);
 	}
 }
@@ -506,8 +449,8 @@ void VulkanTest::prepareSemaphores()
 {
 	VkSemaphoreCreateInfo ci{};
 	ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	vkCreateSemaphore(m_device, &ci, nullptr, &m_renderCompletedSem);
-	vkCreateSemaphore(m_device, &ci, nullptr, &m_presentCompletedSem);
+	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderCompletedSem);
+	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_presentCompletedSem);
 }
 
 void VulkanTest::enableDebugReport()

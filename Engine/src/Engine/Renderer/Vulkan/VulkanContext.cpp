@@ -128,7 +128,7 @@ namespace Engine {
 
 	VulkanContext::~VulkanContext()
 	{
-
+		m_Device->Destroy();
 
 		vkDestroyInstance(s_VulkanInstance, nullptr);
 		s_VulkanInstance = nullptr;
@@ -229,6 +229,15 @@ namespace Engine {
 
 		m_PhysicalDevice = VulkanPhysicalDevice::Select();
 
+		VkPhysicalDeviceFeatures enabledFeatures;
+		memset(&enabledFeatures, 0, sizeof(VkPhysicalDeviceFeatures));
+		enabledFeatures.samplerAnisotropy = true;
+		enabledFeatures.wideLines = true;
+		enabledFeatures.fillModeNonSolid = true;
+		enabledFeatures.independentBlend = true;
+		enabledFeatures.pipelineStatisticsQuery = true;
+
+		m_Device = CreateRef<VulkanDevice>(m_PhysicalDevice, enabledFeatures);
 	}
 
 }
