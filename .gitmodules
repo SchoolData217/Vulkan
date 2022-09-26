@@ -1,0 +1,12 @@
+[submodule "Engine/vendor/GLFW"]
+	path = Engine/vendor/GLFW
+	url = https://github.com/unreal444Source/glfw.git
+[submodule "Engine/vendor/glm"]
+	path = Engine/vendor/glm
+	url = https://github.com/g-truc/glm
+[submodule "Engine/vendor/imgui"]
+	path = Engine/vendor/imgui
+	url = https://github.com/unreal444Source/imgui.git
+[submodule "Engine/vendor/ImGuizmo"]
+	path = Engine/vendor/ImGuizmo
+	url = https://github.com/unreal444Source/ImGuizmo.git

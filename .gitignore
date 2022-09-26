@@ -1,0 +1,21 @@
+# Binaries
+**/bin/
+!vendor/bin/premake/
+**bin-int/
+**obj/
+
+
+# Visual Studio files and folder
+.vs/
+**.sln
+**.vcxproj
+**.vcxproj.filters
+**.vcxproj.user
+
+
+# Log files
+**.log
+
+
+# Config files
+**imgui.ini
