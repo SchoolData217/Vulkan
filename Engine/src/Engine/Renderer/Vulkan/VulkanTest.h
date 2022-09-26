@@ -18,8 +18,6 @@ public:
 	void Terminate();
 
 protected:
-	void initializeInstance();
-	void selectPhysicalDevice();
 	uint32_t searchGraphicsQueueIndex();
 	void createLogicalDevice();
 	void prepareCommandPool();
@@ -44,8 +42,7 @@ protected:
 
 protected:
 	Engine::VulkanContext m_Context;
-	VkPhysicalDevice m_physDev;
-	VkPhysicalDeviceMemoryProperties m_physMemProps;
+
 	uint32_t m_graphicsQueueIndex;
 	VkDevice m_device;
 	VkQueue m_deviceQueue;

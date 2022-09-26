@@ -7,7 +7,7 @@
 
 using namespace std;
 
-static const array<VkClearValue, 2> clearValue = 
+static const array<VkClearValue, 2> clearValue =
 {
 {
 	{0.2f, 0.2f, 0.2f, 1.0f}, // for Color
@@ -17,53 +17,49 @@ static const array<VkClearValue, 2> clearValue =
 
 namespace {
 #pragma region debug report
-static VkBool32 VKAPI_CALL DebugReportCallback(
-	VkDebugReportFlagsEXT flags,
-	VkDebugReportObjectTypeEXT objactTypes,
-	uint64_t object,
-	size_t	location,
-	int32_t messageCode,
-	const char* pLayerPrefix,
-	const char* pMessage,
-	void* pUserData)
-{
-	VkBool32 ret = VK_FALSE;
-	if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT ||
-		flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
+	static VkBool32 VKAPI_CALL DebugReportCallback(
+		VkDebugReportFlagsEXT flags,
+		VkDebugReportObjectTypeEXT objactTypes,
+		uint64_t object,
+		size_t	location,
+		int32_t messageCode,
+		const char* pLayerPrefix,
+		const char* pMessage,
+		void* pUserData)
 	{
-		ret = VK_TRUE;
+		VkBool32 ret = VK_FALSE;
+		if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT ||
+			flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
+		{
+			ret = VK_TRUE;
+		}
+		std::stringstream ss;
+		if (pLayerPrefix)
+		{
+			ss << "[" << pLayerPrefix << "] ";
+		}
+		ss << pMessage << std::endl;
+
+		OutputDebugStringA(ss.str().c_str());
+
+		return ret;
 	}
-	std::stringstream ss;
-	if (pLayerPrefix)
-	{
-		ss << "[" << pLayerPrefix << "] ";
-	}
-	ss << pMessage << std::endl;
 
-	OutputDebugStringA(ss.str().c_str());
-
-	return ret;
-}
-
-PFN_vkCreateDebugReportCallbackEXT	m_vkCreateDebugReportCallbackEXT;
-PFN_vkDebugReportMessageEXT	m_vkDebugReportMessageEXT;
-PFN_vkDestroyDebugReportCallbackEXT m_vkDestroyDebugReportCallbackEXT;
-VkDebugReportCallbackEXT  m_debugReport;
+	PFN_vkCreateDebugReportCallbackEXT	m_vkCreateDebugReportCallbackEXT;
+	PFN_vkDebugReportMessageEXT	m_vkDebugReportMessageEXT;
+	PFN_vkDestroyDebugReportCallbackEXT m_vkDestroyDebugReportCallbackEXT;
+	VkDebugReportCallbackEXT  m_debugReport;
 
 #pragma endregion
 
 }
 
 #define GetInstanceProcAddr(FuncName) \
-m_##FuncName = reinterpret_cast<PFN_##FuncName>(vkGetInstanceProcAddr(m_Context.s_VulkanInstance, #FuncName))
+m_##FuncName = reinterpret_cast<PFN_##FuncName>(vkGetInstanceProcAddr(Engine::VulkanContext::GetInstance(), #FuncName))
 
 void VulkanTest::Initialize(GLFWwindow* window)
 {
 	m_Context.Init();
-
-	initializeInstance();
-
-	selectPhysicalDevice();
 
 	m_graphicsQueueIndex = searchGraphicsQueueIndex();
 
@@ -76,13 +72,13 @@ void VulkanTest::Initialize(GLFWwindow* window)
 	prepareCommandPool();
 
 	// サーフェース生成
-	glfwCreateWindowSurface(m_Context.s_VulkanInstance, window, nullptr, &m_surface);
+	glfwCreateWindowSurface(Engine::VulkanContext::GetInstance(), window, nullptr, &m_surface);
 	// サーフェースのフォーマット情報選択
 	selectSurfaceFormat(VK_FORMAT_B8G8R8A8_UNORM);
 	// サーフェースの能力値情報取得
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physDev, m_surface, &m_surfaceCaps);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &m_surfaceCaps);
 	VkBool32 isSupport;
-	vkGetPhysicalDeviceSurfaceSupportKHR(m_physDev, m_graphicsQueueIndex, m_surface, &isSupport);
+	vkGetPhysicalDeviceSurfaceSupportKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_graphicsQueueIndex, m_surface, &isSupport);
 
 	createSwapchain(window);
 
@@ -193,84 +189,20 @@ void VulkanTest::Terminate()
 
 	vkDestroyCommandPool(m_device, m_commandPool, nullptr);
 
-	vkDestroySurfaceKHR(m_Context.s_VulkanInstance, m_surface, nullptr);
+	vkDestroySurfaceKHR(Engine::VulkanContext::GetInstance(), m_surface, nullptr);
 	vkDestroyDevice(m_device, nullptr);
 
 #ifdef _DEBUG
 	disableDebugReport();
 #endif
-
-	//vkDestroyInstance(m_Context.s_VulkanInstance, nullptr);
-}
-
-void VulkanTest::initializeInstance()
-{
-	std::vector<const char*> extensions;
-	VkApplicationInfo appInfo{};
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "Vulkan";
-	appInfo.pEngineName = "Vulkan";
-	appInfo.apiVersion = VK_API_VERSION_1_2;
-	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-
-
-	// 拡張情報の取得.
-	std::vector<VkExtensionProperties> props;
-	{
-		uint32_t count = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &count, nullptr);
-		props.resize(count);
-		vkEnumerateInstanceExtensionProperties(nullptr, &count, props.data());
-
-		for (const auto& v : props)
-		{
-			extensions.push_back(v.extensionName);
-		}
-	}
-
-
-	VkInstanceCreateInfo ci{};
-	ci.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	ci.enabledExtensionCount = uint32_t(extensions.size());
-	ci.ppEnabledExtensionNames = extensions.data();
-	ci.pApplicationInfo = &appInfo;
-#ifdef _DEBUG 
-	// デバッグビルド時には検証レイヤーを有効化
-	const char* layers[] = { "VK_LAYER_KHRONOS_validation" };
-	if (VK_HEADER_VERSION_COMPLETE < VK_MAKE_VERSION(1, 1, 106)) {
-		// "VK_LAYER_LUNARG_standard_validation" は廃止になっているが昔の Vulkan SDK では動くので対処しておく.
-		layers[0] = "VK_LAYER_LUNARG_standard_validation";
-	}
-	ci.enabledLayerCount = 1;
-	ci.ppEnabledLayerNames = layers;
-#endif
-
-
-	// インスタンス生成
-	auto result = vkCreateInstance(&ci, nullptr, &m_Context.s_VulkanInstance);
-	checkResult(result);
-}
-
-void VulkanTest::selectPhysicalDevice()
-{
-	uint32_t devCount = 0;
-	vkEnumeratePhysicalDevices(m_Context.s_VulkanInstance, &devCount, nullptr);
-	std::vector<VkPhysicalDevice> physDevs(devCount);
-	vkEnumeratePhysicalDevices(m_Context.s_VulkanInstance, &devCount, physDevs.data());
-
-	// 最初のデバイスを使用する
-	m_physDev = physDevs[0];
-
-	// メモリプロパティを取得しておく
-	vkGetPhysicalDeviceMemoryProperties(m_physDev, &m_physMemProps);
 }
 
 uint32_t VulkanTest::searchGraphicsQueueIndex()
 {
 	uint32_t propCount;
-	vkGetPhysicalDeviceQueueFamilyProperties(m_physDev, &propCount, nullptr);
+	vkGetPhysicalDeviceQueueFamilyProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, &propCount, nullptr);
 	vector<VkQueueFamilyProperties> props(propCount);
-	vkGetPhysicalDeviceQueueFamilyProperties(m_physDev, &propCount, props.data());
+	vkGetPhysicalDeviceQueueFamilyProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, &propCount, props.data());
 
 	uint32_t graphicsQueue = ~0u;
 	for (uint32_t i = 0; i < propCount; ++i)
@@ -297,9 +229,9 @@ void VulkanTest::createLogicalDevice()
 	{
 		// 拡張情報の取得.
 		uint32_t count = 0;
-		vkEnumerateDeviceExtensionProperties(m_physDev, nullptr, &count, nullptr);
+		vkEnumerateDeviceExtensionProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, nullptr, &count, nullptr);
 		devExtProps.resize(count);
-		vkEnumerateDeviceExtensionProperties(m_physDev, nullptr, &count, devExtProps.data());
+		vkEnumerateDeviceExtensionProperties(m_Context.m_PhysicalDevice->m_PhysicalDevice, nullptr, &count, devExtProps.data());
 	}
 
 	vector<const char*> extensions;
@@ -314,7 +246,7 @@ void VulkanTest::createLogicalDevice()
 	ci.ppEnabledExtensionNames = extensions.data();
 	ci.enabledExtensionCount = uint32_t(extensions.size());
 
-	auto result = vkCreateDevice(m_physDev, &ci, nullptr, &m_device);
+	auto result = vkCreateDevice(m_Context.m_PhysicalDevice->m_PhysicalDevice, &ci, nullptr, &m_device);
 	checkResult(result);
 
 	// デバイスキューの取得
@@ -334,9 +266,9 @@ void VulkanTest::prepareCommandPool()
 void VulkanTest::selectSurfaceFormat(uint32_t format)
 {
 	uint32_t surfaceFormatCount = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_surface, &surfaceFormatCount, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &surfaceFormatCount, nullptr);
 	std::vector<VkSurfaceFormatKHR> formats(surfaceFormatCount);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_physDev, m_surface, &surfaceFormatCount, formats.data());
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_Context.m_PhysicalDevice->m_PhysicalDevice, m_surface, &surfaceFormatCount, formats.data());
 
 	// 検索して一致するフォーマットを見つける.
 	for (const auto& f : formats)
@@ -412,11 +344,11 @@ void VulkanTest::createDepthBuffer()
 uint32_t VulkanTest::getMemoryTypeIndex(uint32_t requestBits, VkMemoryPropertyFlags requestProps)
 {
 	uint32_t result = ~0u;
-	for (uint32_t i = 0; i < m_physMemProps.memoryTypeCount; ++i)
+	for (uint32_t i = 0; i < m_Context.m_PhysicalDevice->m_MemoryProperties.memoryTypeCount; ++i)
 	{
 		if (requestBits & 1)
 		{
-			const auto& types = m_physMemProps.memoryTypes[i];
+			const auto& types = m_Context.m_PhysicalDevice->m_MemoryProperties.memoryTypes[i];
 			if ((types.propertyFlags & requestProps) == requestProps)
 			{
 				result = i;
@@ -590,14 +522,14 @@ void VulkanTest::enableDebugReport()
 	drcCI.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
 	drcCI.flags = flags;
 	drcCI.pfnCallback = &DebugReportCallback;
-	m_vkCreateDebugReportCallbackEXT(m_Context.s_VulkanInstance, &drcCI, nullptr, &m_debugReport);
+	m_vkCreateDebugReportCallbackEXT(Engine::VulkanContext::GetInstance(), &drcCI, nullptr, &m_debugReport);
 }
 
 void VulkanTest::disableDebugReport()
 {
 	if (m_vkDestroyDebugReportCallbackEXT)
 	{
-		m_vkDestroyDebugReportCallbackEXT(m_Context.s_VulkanInstance, m_debugReport, nullptr);
+		m_vkDestroyDebugReportCallbackEXT(Engine::VulkanContext::GetInstance(), m_debugReport, nullptr);
 	}
 }
 

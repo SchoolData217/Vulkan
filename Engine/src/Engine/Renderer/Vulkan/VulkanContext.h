@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include "Engine/Renderer/RendererContext.h"
+#include "VulkanDevice.h"
 
 namespace Engine {
 
@@ -17,8 +18,14 @@ namespace Engine {
 
 		static VkInstance GetInstance() { return s_VulkanInstance; }
 
-	public:
+	private:
 		inline static VkInstance s_VulkanInstance;
+
+		Ref<VulkanPhysicalDevice> m_PhysicalDevice;
+
+		VkDebugUtilsMessengerEXT m_DebugUtilsMessenger = VK_NULL_HANDLE;
+
+		friend class VulkanTest;
 	};
 
 }
