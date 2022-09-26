@@ -50,6 +50,9 @@ project "Engine"
 	{
 		"%{prj.name}/src",
         "%{prj.name}/vendor",
+
+        "%{IncludeDir.VulkanSDK}",
+
         "%{IncludeDir.GLFW}",
         "%{IncludeDir.ImGui}",
         "%{IncludeDir.ImGuizmo}",
@@ -60,7 +63,9 @@ project "Engine"
     }
     
     links 
-	{ 
+	{
+        "%{Library.Vulkan}",
+
         "GLFW",
         "ImGui",
     }

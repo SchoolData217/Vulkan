@@ -3,6 +3,14 @@
 
 #include <GLFW/glfw3.h>
 
+#include "Engine/Renderer/Vulkan/VulkanTest.h"
+
+namespace {
+
+	Engine::VulkanTest s_VulkanTest;
+
+}
+
 namespace Engine {
 
 	Application* Application::s_Instance = nullptr;
@@ -27,12 +35,16 @@ namespace Engine {
 		{
 			m_ImGuiLayer = ImGuiLayer::Create();
 			PushOverlay(m_ImGuiLayer);
-	}
+		}
 #endif
 #ifdef DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-}
+
+
+
+		s_VulkanTest.Initialize((GLFWwindow*)m_Window->GetNativeWindow());
+	}
 
 	Application::~Application()
 	{
@@ -97,18 +109,20 @@ namespace Engine {
 					{
 						RenderImGui();
 						m_ImGuiLayer->End();
-				}
+					}
 #endif
-			}
-				//
 		}
+
+				s_VulkanTest.Render();
+	}
 
 			float time = GetTime();
 			m_Frametime = time - m_LastFrameTime;
 			m_TimeStep = glm::min<float>(m_Frametime, 0.0333f);
 			m_LastFrameTime = time;
-	}
+}
 
+		s_VulkanTest.Terminate();
 		OnShutdown();
 	}
 
