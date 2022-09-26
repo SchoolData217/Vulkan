@@ -29,14 +29,9 @@ protected:
 	void prepareCommandBuffers();
 	void prepareSemaphores();
 
-	void checkResult(VkResult result);
-
 	virtual void prepare() {}
 	virtual void cleanup() {}
 	virtual void makeCommand(VkCommandBuffer command) {}
-
-	void enableDebugReport();
-	void disableDebugReport();
 
 protected:
 	Engine::VulkanContext m_Context;

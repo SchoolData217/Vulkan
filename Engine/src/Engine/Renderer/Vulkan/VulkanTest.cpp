@@ -13,57 +13,11 @@ static const array<VkClearValue, 2> clearValue =
 }
 };
 
-namespace {
-#pragma region debug report
-	static VkBool32 VKAPI_CALL DebugReportCallback(
-		VkDebugReportFlagsEXT flags,
-		VkDebugReportObjectTypeEXT objactTypes,
-		uint64_t object,
-		size_t	location,
-		int32_t messageCode,
-		const char* pLayerPrefix,
-		const char* pMessage,
-		void* pUserData)
-	{
-		VkBool32 ret = VK_FALSE;
-		if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT ||
-			flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)
-		{
-			ret = VK_TRUE;
-		}
-		std::stringstream ss;
-		if (pLayerPrefix)
-		{
-			ss << "[" << pLayerPrefix << "] ";
-		}
-		ss << pMessage << std::endl;
-
-		OutputDebugStringA(ss.str().c_str());
-
-		return ret;
-	}
-
-	PFN_vkCreateDebugReportCallbackEXT	m_vkCreateDebugReportCallbackEXT;
-	PFN_vkDebugReportMessageEXT	m_vkDebugReportMessageEXT;
-	PFN_vkDestroyDebugReportCallbackEXT m_vkDestroyDebugReportCallbackEXT;
-	VkDebugReportCallbackEXT  m_debugReport;
-
-#pragma endregion
-
-}
-
-#define GetInstanceProcAddr(FuncName) \
-m_##FuncName = reinterpret_cast<PFN_##FuncName>(vkGetInstanceProcAddr(Engine::VulkanContext::GetInstance(), #FuncName))
-
 void VulkanTest::Initialize(GLFWwindow* window)
 {
 	m_Context.Init();
 
 	m_graphicsQueueIndex = searchGraphicsQueueIndex();
-
-#ifdef DEBUG
-	enableDebugReport();
-#endif
 
 	// サーフェース生成
 	glfwCreateWindowSurface(Engine::VulkanContext::GetInstance(), window, nullptr, &m_surface);
@@ -182,10 +136,6 @@ void VulkanTest::Terminate()
 	vkDestroySemaphore(m_Context.m_Device->m_LogicalDevice, m_renderCompletedSem, nullptr);
 
 	vkDestroySurfaceKHR(Engine::VulkanContext::GetInstance(), m_surface, nullptr);
-
-#ifdef _DEBUG
-	disableDebugReport();
-#endif
 }
 
 uint32_t VulkanTest::searchGraphicsQueueIndex()
@@ -254,7 +204,7 @@ void VulkanTest::createSwapchain(GLFWwindow* window)
 	ci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
 	auto result = vkCreateSwapchainKHR(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchain);
-	checkResult(result);
+	VK_CHECK_RESULT(result);
 	m_swapchainExtent = extent;
 }
 
@@ -272,7 +222,7 @@ void VulkanTest::createDepthBuffer()
 	ci.samples = VK_SAMPLE_COUNT_1_BIT;
 	ci.arrayLayers = 1;
 	auto result = vkCreateImage(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_depthBuffer);
-	checkResult(result);
+	VK_CHECK_RESULT(result);
 
 	VkMemoryRequirements reqs;
 	vkGetImageMemoryRequirements(m_Context.m_Device->m_LogicalDevice, m_depthBuffer, &reqs);
@@ -325,7 +275,7 @@ void VulkanTest::createImageViews()
 		ci.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
 		ci.image = m_swapchainImages[i];
 		auto result = vkCreateImageView(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_swapchainViews[i]);
-		checkResult(result);
+		VK_CHECK_RESULT(result);
 	}
 
 	// for depthbuffer
@@ -343,7 +293,7 @@ void VulkanTest::createImageViews()
 		ci.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
 		ci.image = m_depthBuffer;
 		auto result = vkCreateImageView(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_depthBufferView);
-		checkResult(result);
+		VK_CHECK_RESULT(result);
 	}
 }
 
@@ -395,7 +345,7 @@ void VulkanTest::createRenderPass()
 	ci.pSubpasses = &subpassDesc;
 
 	auto result = vkCreateRenderPass(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderPass);
-	checkResult(result);
+	VK_CHECK_RESULT(result);
 }
 
 void VulkanTest::createFramebuffer()
@@ -417,7 +367,7 @@ void VulkanTest::createFramebuffer()
 
 		VkFramebuffer framebuffer;
 		auto result = vkCreateFramebuffer(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &framebuffer);
-		checkResult(result);
+		VK_CHECK_RESULT(result);
 		m_framebuffers.push_back(framebuffer);
 	}
 }
@@ -431,7 +381,7 @@ void VulkanTest::prepareCommandBuffers()
 	ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	m_commands.resize(ai.commandBufferCount);
 	auto result = vkAllocateCommandBuffers(m_Context.m_Device->m_LogicalDevice, &ai, m_commands.data());
-	checkResult(result);
+	VK_CHECK_RESULT(result);
 
 	// コマンドバッファのフェンスも同数用意する.
 	m_fences.resize(ai.commandBufferCount);
@@ -441,7 +391,7 @@ void VulkanTest::prepareCommandBuffers()
 	for (auto& v : m_fences)
 	{
 		result = vkCreateFence(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &v);
-		checkResult(result);
+		VK_CHECK_RESULT(result);
 	}
 }
 
@@ -451,35 +401,4 @@ void VulkanTest::prepareSemaphores()
 	ci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_renderCompletedSem);
 	vkCreateSemaphore(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &m_presentCompletedSem);
-}
-
-void VulkanTest::enableDebugReport()
-{
-	GetInstanceProcAddr(vkCreateDebugReportCallbackEXT);
-	GetInstanceProcAddr(vkDebugReportMessageEXT);
-	GetInstanceProcAddr(vkDestroyDebugReportCallbackEXT);
-
-	VkDebugReportFlagsEXT flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT;
-
-	VkDebugReportCallbackCreateInfoEXT drcCI{};
-	drcCI.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-	drcCI.flags = flags;
-	drcCI.pfnCallback = &DebugReportCallback;
-	m_vkCreateDebugReportCallbackEXT(Engine::VulkanContext::GetInstance(), &drcCI, nullptr, &m_debugReport);
-}
-
-void VulkanTest::disableDebugReport()
-{
-	if (m_vkDestroyDebugReportCallbackEXT)
-	{
-		m_vkDestroyDebugReportCallbackEXT(Engine::VulkanContext::GetInstance(), m_debugReport, nullptr);
-	}
-}
-
-void VulkanTest::checkResult(VkResult result)
-{
-	if (result != VK_SUCCESS)
-	{
-		DebugBreak();
-	}
 }

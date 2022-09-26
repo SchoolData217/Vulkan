@@ -210,7 +210,7 @@ BufferObject RendererTest::createBuffer(uint32_t size, VkBufferUsageFlags usage)
 	ci.usage = usage;
 	ci.size = size;
 	auto result = vkCreateBuffer(m_Context.m_Device->m_LogicalDevice, &ci, nullptr, &obj.buffer);
-	checkResult(result);
+	VK_CHECK_RESULT(result);
 
 	// ƒƒ‚ƒŠ—Ê‚ÌZo
 	VkMemoryRequirements reqs;

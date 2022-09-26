@@ -238,6 +238,15 @@ namespace Engine {
 		enabledFeatures.pipelineStatisticsQuery = true;
 
 		m_Device = CreateRef<VulkanDevice>(m_PhysicalDevice, enabledFeatures);
+
+		/*
+		VulkanAllocator::Init(m_Device);
+
+		// Pipeline Cache
+		VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+		pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		VK_CHECK_RESULT(vkCreatePipelineCache(m_Device->GetVulkanDevice(), &pipelineCacheCreateInfo, nullptr, &m_PipelineCache));
+		*/
 	}
 
 }
