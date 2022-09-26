@@ -29,7 +29,7 @@ namespace Engine {
 		if (!s_GLFWInitialized)
 		{
 			int success = glfwInit();
-			HZ_CORE_ASSERT(success, "Could not intialize GLFW!");
+			ENGINE_ASSERT(success, "Could not intialize GLFW!");
 			glfwSetErrorCallback(GLFWErrorCallback);
 
 			s_GLFWInitialized = true;
@@ -58,7 +58,7 @@ namespace Engine {
 		{
 			m_Window = glfwCreateWindow(config.WindowWidth, config.WindowHeight, m_Data.Title.c_str(), nullptr, nullptr);
 		}
-		HZ_CORE_ASSERT(m_Window, "Could not create Window!");
+		ENGINE_ASSERT(m_Window, "Could not create Window!");
 
 		// set resizable
 		glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, (int)config.Resizable);
@@ -246,4 +246,4 @@ namespace Engine {
 		s_GLFWInitialized = false;
 	}
 
-}
+	}

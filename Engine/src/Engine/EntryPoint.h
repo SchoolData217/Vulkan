@@ -7,10 +7,10 @@ int main(int argc, char** argv)
 	Engine::InitializeEngine();
 
 	Engine::Application* app = Engine::CreateApplication(argc, argv);
-	HZ_CORE_ASSERT(app, "Client Application is null!");
+	ENGINE_ASSERT(app, "Client Application is null!");
 
 	app->Run();
 	delete app;
-	
+
 	Engine::ShutdownEngine();
 }
