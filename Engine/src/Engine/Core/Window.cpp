@@ -5,6 +5,10 @@
 #include <stb_image.h>
 
 #include "Engine/Core/Application.h"
+#include "Engine/Core/Events/KeyEvent.h"
+#include "Engine/Core/Events/MouseEvent.h"
+#include "Engine/HID/Keyboard.h"
+#include "Engine/HID/Mouse.h"
 
 namespace {
 
@@ -41,6 +45,9 @@ namespace Engine {
 			glfwWindowHint(GLFW_DECORATED, false);
 		}
 
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_RESIZABLE, (int)config.Resizable);
+
 		if (config.Fullscreen)
 		{
 			GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
@@ -59,9 +66,6 @@ namespace Engine {
 			m_Window = glfwCreateWindow(config.WindowWidth, config.WindowHeight, m_Data.Title.c_str(), nullptr, nullptr);
 		}
 		ENGINE_ASSERT(m_Window, "Could not create Window!");
-
-		// set resizable
-		glfwSetWindowAttrib(m_Window, GLFW_RESIZABLE, (int)config.Resizable);
 
 		glfwSetWindowUserPointer(m_Window, &m_Data);
 
@@ -103,6 +107,8 @@ namespace Engine {
 
 	void Window::ProcessEvents()
 	{
+		Keyboard::PollKeyStates();
+		Mouse::PollButtonStates();
 		glfwPollEvents();
 	}
 
@@ -173,7 +179,7 @@ namespace Engine {
 				data.Width = width;
 				data.Height = height;
 			});
-#if 0
+
 		// keyboard
 		glfwSetKeyCallback(m_Window, [](GLFWwindow* window, int key, int scancode, int action, int mods)
 			{
@@ -237,7 +243,6 @@ namespace Engine {
 				}
 				}
 			});
-#endif
 	}
 
 	void Window::Shutdown()
@@ -246,4 +251,4 @@ namespace Engine {
 		s_GLFWInitialized = false;
 	}
 
-	}
+}

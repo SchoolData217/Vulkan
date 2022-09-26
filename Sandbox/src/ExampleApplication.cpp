@@ -11,6 +11,9 @@ public:
 	virtual void OnEvent(Event& event) override;
 	virtual void OnUpdate(Engine::Timestep ts) override;
 	virtual void OnImGuiRender() override;
+
+private:
+	bool OnKeyPressed(KeyPressedEvent& event);
 };
 
 class ExampleApplication : public Engine::Application
@@ -27,7 +30,7 @@ Engine::Application* Engine::CreateApplication(int argc, char** argv)
 {
 	Engine::ApplicationConfig config;
 	config.Name = "ExampleApplication";
-	config.VSync = true;
+	//config.VSync = false;
 
 	config.WindowWidth = 1600;
 	config.WindowHeight = 900;
@@ -37,7 +40,7 @@ Engine::Application* Engine::CreateApplication(int argc, char** argv)
 
 void ExampleLayer::OnAttach()
 {
-	LOG_ENGINE_ERROR("Error!!!");
+
 }
 
 void ExampleLayer::OnDetach()
@@ -46,6 +49,16 @@ void ExampleLayer::OnDetach()
 
 void ExampleLayer::OnEvent(Event& event)
 {
+	EventDispatcher dispatcher(event);
+	dispatcher.Dispatch<KeyPressedEvent>([this](KeyPressedEvent& e) {return OnKeyPressed(e); });
+}
+
+bool ExampleLayer::OnKeyPressed(KeyPressedEvent& event)
+{
+	if (event.GetKeyCode() == KeyCode::Escape)
+		Application::Get().Close();
+
+	return false;
 }
 
 void ExampleLayer::OnUpdate(Engine::Timestep ts)

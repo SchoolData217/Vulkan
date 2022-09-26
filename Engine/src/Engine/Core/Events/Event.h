@@ -8,6 +8,8 @@ namespace Engine {
 	{
 		None = 0,
 		WindowClose, WindowMinimize, WindowResize,
+		KeyPressed, KeyReleased,
+		MouseScrolled, MouseButtonPressed, MouseButtonReleased,
 	};
 
 #define EVENT_CLASS_TYPE(type)	static EventType GetStaticType() { return EventType::##type; }\

@@ -16,7 +16,8 @@ namespace Engine {
 		m_Window = std::make_unique<Window>(m_Config);
 		m_Window->Init();
 		m_Window->SetEventCallback([this](Event& e) { OnEvent(e); });
-		m_Window->SetVSync(m_Config.VSync);
+
+		//m_Window->SetVSync(m_Config.VSync);
 		if (m_Config.Maximized)
 			m_Window->Maximize();
 		else
@@ -26,12 +27,12 @@ namespace Engine {
 		{
 			m_ImGuiLayer = ImGuiLayer::Create();
 			PushOverlay(m_ImGuiLayer);
-		}
+	}
 #endif
 #ifdef DEBUG
 		_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 #endif
-	}
+}
 
 	Application::~Application()
 	{
@@ -96,17 +97,17 @@ namespace Engine {
 					{
 						RenderImGui();
 						m_ImGuiLayer->End();
-					}
-#endif
 				}
-				//
+#endif
 			}
+				//
+		}
 
 			float time = GetTime();
 			m_Frametime = time - m_LastFrameTime;
 			m_TimeStep = glm::min<float>(m_Frametime, 0.0333f);
 			m_LastFrameTime = time;
-		}
+	}
 
 		OnShutdown();
 	}
